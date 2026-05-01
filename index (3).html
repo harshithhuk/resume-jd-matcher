@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ResuMatch — AI Resume Analyser</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #080b0f;
+      --surface: #0e1318;
+      --surface2: #131a22;
+      --border: #1e2d3d;
+      --border2: #253547;
+      --text: #d4e4f0;
+      --muted: #4a6278;
+      --accent: #00e5a0;
+      --accent2: #0099ff;
+      --warn: #ffb347;
+      --danger: #ff5f6d;
+      --mono: 'IBM Plex Mono', monospace;
+      --sans: 'Syne', sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Grid noise texture overlay */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      background-image:
+        linear-gradient(rgba(0,229,160,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,229,160,0.02) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    /* ── HEADER ── */
+    header {
+      position: relative; z-index: 10;
+      border-bottom: 1px solid var(--border);
+      padding: 1.2rem 2rem;
+      display: flex; align-items: center; justify-content: space-between;
+      background: rgba(8,11,15,0.95);
+      backdrop-filter: blur(10px);
+    }
+    .logo {
+      font-family: var(--mono);
+      font-size: 1.1rem; font-weight: 600;
+      color: var(--accent);
+      display: flex; align-items: center; gap: 0.6rem;
+      letter-spacing: -0.02em;
+    }
+    .logo-bracket { color: var(--muted); }
+    .header-tag {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--muted);
+      border: 1px solid var(--border2);
+      padding: 0.25rem 0.7rem;
+      border-radius: 4px;
+      letter-spacing: 0.1em;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      position: relative; z-index: 1;
+      text-align: center;
+      padding: 4rem 2rem 3rem;
+      max-width: 720px; margin: 0 auto;
+      animation: fadeUp 0.7s ease both;
+    }
+    .hero-kicker {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--accent);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      margin-bottom: 1.2rem;
+      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+    }
+    .hero-kicker::before, .hero-kicker::after {
+      content: ''; display: inline-block; width: 30px; height: 1px; background: var(--accent); opacity: 0.4;
+    }
+    h1 {
+      font-size: clamp(2.4rem, 6vw, 4rem);
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      color: #fff;
+      margin-bottom: 1rem;
+    }
+    h1 span { color: var(--accent); }
+    .hero-sub {
+      font-size: 1rem;
+      color: var(--muted);
+      line-height: 1.7;
+      max-width: 480px; margin: 0 auto;
+      font-weight: 400;
+    }
+
+    /* ── MAIN APP ── */
+    .app {
+      position: relative; z-index: 1;
+      max-width: 1100px; margin: 0 auto;
+      padding: 0 2rem 5rem;
+    }
+
+    /* INPUT SECTION */
+    .input-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 1.5rem;
+      animation: fadeUp 0.7s ease 0.15s both;
+    }
+    .input-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .input-panel:focus-within { border-color: var(--accent); }
+    .panel-header {
+      display: flex; align-items: center; gap: 0.6rem;
+      padding: 0.8rem 1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+    .panel-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+    .dot-green  { background: var(--accent); }
+    .dot-blue   { background: var(--accent2); }
+    .panel-title {
+      font-family: var(--mono);
+      font-size: 0.72rem; font-weight: 600;
+      color: var(--text);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .panel-counter {
+      margin-left: auto;
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      color: var(--muted);
+    }
+    textarea {
+      width: 100%; height: 280px;
+      background: transparent;
+      border: none; outline: none; resize: none;
+      padding: 1rem;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      color: var(--text);
+      line-height: 1.7;
+    }
+    textarea::placeholder { color: var(--muted); }
+
+    /* ANALYSE BUTTON */
+    .btn-row {
+      display: flex; justify-content: center;
+      margin-bottom: 3rem;
+      animation: fadeUp 0.7s ease 0.25s both;
+    }
+    #analyseBtn {
+      position: relative;
+      background: var(--accent);
+      color: #080b0f;
+      border: none; cursor: pointer;
+      font-family: var(--mono);
+      font-size: 0.88rem; font-weight: 600;
+      letter-spacing: 0.1em;
+      padding: 1rem 3rem;
+      border-radius: 8px;
+      text-transform: uppercase;
+      display: flex; align-items: center; gap: 0.8rem;
+      transition: opacity 0.2s, transform 0.15s;
+      overflow: hidden;
+    }
+    #analyseBtn::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+      transform: translateX(-100%);
+      transition: transform 0.5s;
+    }
+    #analyseBtn:hover::before { transform: translateX(100%); }
+    #analyseBtn:hover { opacity: 0.9; transform: translateY(-1px); }
+    #analyseBtn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .btn-icon { font-size: 1.1rem; }
+
+    /* LOADING */
+    #loading {
+      display: none;
+      text-align: center; padding: 3rem;
+    }
+    .loader-ring {
+      width: 48px; height: 48px;
+      border: 3px solid var(--border2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 1rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader-text {
+      font-family: var(--mono);
+      font-size: 0.8rem; color: var(--muted);
+      animation: blink 1.2s step-end infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+    /* ERROR */
+    #errorBox {
+      display: none;
+      background: rgba(255,95,109,0.08);
+      border: 1px solid rgba(255,95,109,0.3);
+      border-radius: 10px;
+      padding: 1rem 1.4rem;
+      font-family: var(--mono);
+      font-size: 0.84rem;
+      color: var(--danger);
+      margin-bottom: 2rem;
+      text-align: center;
+    }
+
+    /* RESULTS */
+    #results { display: none; animation: fadeUp 0.6s ease both; }
+
+    /* SCORE CARD */
+    .score-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 2rem;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 2rem;
+      align-items: center;
+      margin-bottom: 1.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .score-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+    }
+    .score-circle-wrap {
+      position: relative;
+      width: 130px; height: 130px;
+      flex-shrink: 0;
+    }
+    .score-svg { width: 130px; height: 130px; transform: rotate(-90deg); }
+    .score-bg { fill: none; stroke: var(--border2); stroke-width: 8; }
+    .score-fill { fill: none; stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset 1.5s cubic-bezier(.4,0,.2,1); }
+    .score-center {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+    .score-number {
+      font-family: var(--mono);
+      font-size: 2.2rem; font-weight: 600;
+      line-height: 1;
+    }
+    .score-pct { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); }
+    .score-info { flex: 1; }
+    .score-verdict {
+      font-size: 1.5rem; font-weight: 800;
+      margin-bottom: 0.5rem;
+    }
+    .score-summary { font-size: 0.92rem; color: var(--muted); line-height: 1.7; }
+
+    /* RESULTS GRID */
+    .results-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.2rem;
+      margin-bottom: 1.2rem;
+    }
+    .result-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .result-panel-header {
+      padding: 0.8rem 1.1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+      display: flex; align-items: center; gap: 0.5rem;
+      font-family: var(--mono);
+      font-size: 0.72rem; font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .result-panel-body { padding: 1rem 1.1rem; }
+
+    /* PILL TAGS */
+    .pill-wrap { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .pill {
+      font-family: var(--mono);
+      font-size: 0.75rem; font-weight: 500;
+      padding: 0.25rem 0.65rem;
+      border-radius: 6px;
+      display: inline-flex; align-items: center; gap: 0.3rem;
+    }
+    .pill-match   { background: rgba(0,229,160,0.1); color: var(--accent); border: 1px solid rgba(0,229,160,0.2); }
+    .pill-missing { background: rgba(255,95,109,0.1); color: var(--danger); border: 1px solid rgba(255,95,109,0.2); }
+    .pill-ats     { background: rgba(0,153,255,0.1); color: var(--accent2); border: 1px solid rgba(0,153,255,0.2); }
+    .pill-strength{ background: rgba(255,179,71,0.1); color: var(--warn); border: 1px solid rgba(255,179,71,0.2); }
+
+    /* SUGGESTIONS */
+    .suggestion-item {
+      padding: 0.9rem 0;
+      border-bottom: 1px solid var(--border);
+      display: flex; gap: 0.8rem;
+      align-items: flex-start;
+    }
+    .suggestion-item:last-child { border-bottom: none; }
+    .suggestion-num {
+      font-family: var(--mono); font-size: 0.7rem;
+      color: var(--accent); font-weight: 600;
+      background: rgba(0,229,160,0.1);
+      border: 1px solid rgba(0,229,160,0.2);
+      width: 22px; height: 22px; border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; margin-top: 1px;
+    }
+    .suggestion-title { font-weight: 700; font-size: 0.88rem; margin-bottom: 0.2rem; }
+    .suggestion-detail { font-size: 0.84rem; color: var(--muted); line-height: 1.6; }
+
+    /* FULL WIDTH PANEL */
+    .result-panel-full { grid-column: 1 / -1; }
+
+    /* COPY BUTTON */
+    .copy-btn {
+      font-family: var(--mono); font-size: 0.72rem;
+      background: transparent; border: 1px solid var(--border2);
+      color: var(--muted); padding: 0.3rem 0.7rem; border-radius: 4px;
+      cursor: pointer; margin-left: auto;
+      transition: border-color .2s, color .2s;
+      letter-spacing: 0.05em;
+    }
+    .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 700px) {
+      .input-grid, .results-grid { grid-template-columns: 1fr; }
+      h1 { font-size: 2rem; }
+      .score-card { grid-template-columns: 1fr; text-align: center; }
+      .score-circle-wrap { margin: 0 auto; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <span class="logo-bracket">[</span>ResuMatch<span class="logo-bracket">]</span>
+  </div>
+  <span class="header-tag">AI · ATS · NLP</span>
+</header>
+
+<div class="hero">
+  <p class="hero-kicker">AI-Powered Career Tool</p>
+  <h1>Match Your Resume to Any <span>Job</span></h1>
+  <p class="hero-sub">Paste your CV and a job description. Our AI scores the match, surfaces missing keywords, and gives you actionable steps to get past ATS filters.</p>
+</div>
+
+<div class="app">
+
+  <!-- INPUTS -->
+  <div class="input-grid">
+    <div class="input-panel">
+      <div class="panel-header">
+        <div class="panel-dot dot-green"></div>
+        <span class="panel-title">Your Resume / CV</span>
+        <span class="panel-counter" id="resumeCount">0 words</span>
+      </div>
+      <textarea id="resumeInput" placeholder="Paste your full resume text here…&#10;&#10;Include your skills, experience, education, and any certifications."></textarea>
+    </div>
+
+    <div class="input-panel">
+      <div class="panel-header">
+        <div class="panel-dot dot-blue"></div>
+        <span class="panel-title">Job Description</span>
+        <span class="panel-counter" id="jdCount">0 words</span>
+      </div>
+      <textarea id="jdInput" placeholder="Paste the full job description here…&#10;&#10;Include all requirements, responsibilities, and preferred qualifications."></textarea>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button id="analyseBtn" onclick="analyse()">
+      <span class="btn-icon">⚡</span> Analyse Match
+    </button>
+  </div>
+
+  <!-- LOADING -->
+  <div id="loading">
+    <div class="loader-ring"></div>
+    <p class="loader-text">Analysing your resume against the JD…</p>
+  </div>
+
+  <!-- ERROR -->
+  <div id="errorBox"></div>
+
+  <!-- RESULTS -->
+  <div id="results">
+
+    <!-- SCORE CARD -->
+    <div class="score-card" id="scoreCard">
+      <div class="score-circle-wrap">
+        <svg class="score-svg" viewBox="0 0 42 42">
+          <circle class="score-bg" cx="21" cy="21" r="17"/>
+          <circle class="score-fill" id="scoreArc" cx="21" cy="21" r="17"
+            stroke-dasharray="106.8" stroke-dashoffset="106.8"/>
+        </svg>
+        <div class="score-center">
+          <span class="score-number" id="scoreNumber">0</span>
+          <span class="score-pct">/ 100</span>
+        </div>
+      </div>
+      <div class="score-info">
+        <div class="score-verdict" id="scoreVerdict">—</div>
+        <p class="score-summary" id="scoreSummary">—</p>
+      </div>
+    </div>
+
+    <!-- RESULTS GRID -->
+    <div class="results-grid">
+
+      <!-- Matching Skills -->
+      <div class="result-panel">
+        <div class="result-panel-header" style="color:var(--accent)">
+          ✓ &nbsp;Matching Skills
+        </div>
+        <div class="result-panel-body">
+          <div class="pill-wrap" id="matchingSkills"></div>
+        </div>
+      </div>
+
+      <!-- Missing Keywords -->
+      <div class="result-panel">
+        <div class="result-panel-header" style="color:var(--danger)">
+          ✗ &nbsp;Missing Keywords
+        </div>
+        <div class="result-panel-body">
+          <div class="pill-wrap" id="missingKeywords"></div>
+        </div>
+      </div>
+
+      <!-- Strengths -->
+      <div class="result-panel">
+        <div class="result-panel-header" style="color:var(--warn)">
+          ★ &nbsp;Your Strengths for This Role
+        </div>
+        <div class="result-panel-body">
+          <div class="pill-wrap" id="strengths"></div>
+        </div>
+      </div>
+
+      <!-- ATS Keywords -->
+      <div class="result-panel">
+        <div class="result-panel-header" style="color:var(--accent2)">
+          + &nbsp;ATS Keywords to Add
+        </div>
+        <div class="result-panel-body">
+          <div class="pill-wrap" id="atsKeywords"></div>
+        </div>
+      </div>
+
+      <!-- Suggestions (full width) -->
+      <div class="result-panel result-panel-full">
+        <div class="result-panel-header" style="color:var(--text); justify-content:space-between;">
+          <span>→ &nbsp;Action Plan to Improve Your Match</span>
+          <button class="copy-btn" onclick="copySuggestions()">Copy</button>
+        </div>
+        <div class="result-panel-body" id="suggestions"></div>
+      </div>
+
+    </div><!-- /results-grid -->
+  </div><!-- /results -->
+
+</div><!-- /app -->
+
+<script>
+  // Word counters
+  function countWords(str) {
+    return str.trim() ? str.trim().split(/\s+/).length : 0;
+  }
+  document.getElementById('resumeInput').addEventListener('input', function() {
+    document.getElementById('resumeCount').textContent = countWords(this.value) + ' words';
+  });
+  document.getElementById('jdInput').addEventListener('input', function() {
+    document.getElementById('jdCount').textContent = countWords(this.value) + ' words';
+  });
+
+  // Score colour
+  function scoreColor(score) {
+    if (score >= 75) return 'var(--accent)';
+    if (score >= 50) return 'var(--warn)';
+    return 'var(--danger)';
+  }
+
+  // Animate score circle
+  function animateScore(score) {
+    const circumference = 106.8;
+    const offset = circumference - (score / 100) * circumference;
+    const arc = document.getElementById('scoreArc');
+    const num = document.getElementById('scoreNumber');
+    const color = scoreColor(score);
+
+    arc.style.stroke = color;
+    arc.style.strokeDashoffset = offset;
+    num.style.color = color;
+
+    let current = 0;
+    const step = score / 60;
+    const timer = setInterval(() => {
+      current = Math.min(current + step, score);
+      num.textContent = Math.round(current);
+      if (current >= score) clearInterval(timer);
+    }, 16);
+  }
+
+  function renderPills(containerId, items, pillClass) {
+    const el = document.getElementById(containerId);
+    if (!items || !items.length) {
+      el.innerHTML = '<span style="font-family:var(--mono);font-size:.8rem;color:var(--muted)">None found</span>';
+      return;
+    }
+    el.innerHTML = items.map(item =>
+      `<span class="pill ${pillClass}">&#10003; ${item}</span>`
+    ).join('');
+  }
+
+  function renderSuggestions(items) {
+    const el = document.getElementById('suggestions');
+    if (!items || !items.length) { el.innerHTML = '<p style="color:var(--muted)">No suggestions.</p>'; return; }
+    el.innerHTML = items.map((s, i) => `
+      <div class="suggestion-item">
+        <div class="suggestion-num">${i + 1}</div>
+        <div>
+          <div class="suggestion-title">${s.title}</div>
+          <div class="suggestion-detail">${s.detail}</div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function copySuggestions() {
+    const items = document.querySelectorAll('.suggestion-item');
+    const text = Array.from(items).map((el, i) => {
+      const title = el.querySelector('.suggestion-title').textContent;
+      const detail = el.querySelector('.suggestion-detail').textContent;
+      return `${i + 1}. ${title}\n   ${detail}`;
+    }).join('\n\n');
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = document.querySelector('.copy-btn');
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = 'Copy', 2000);
+    });
+  }
+
+  async function analyse() {
+    const resume = document.getElementById('resumeInput').value.trim();
+    const jd = document.getElementById('jdInput').value.trim();
+
+    if (!resume) { alert('Please paste your resume.'); return; }
+    if (!jd) { alert('Please paste the job description.'); return; }
+
+    // Reset UI
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('errorBox').style.display = 'none';
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('analyseBtn').disabled = true;
+
+    try {
+      const res = await fetch('/api/match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resume, jobDescription: jd }),
+      });
+
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      // Render results
+      document.getElementById('scoreVerdict').textContent = data.verdict || '—';
+      document.getElementById('scoreVerdict').style.color = scoreColor(data.matchScore);
+      document.getElementById('scoreSummary').textContent = data.summary || '';
+
+      renderPills('matchingSkills', data.matchingSkills, 'pill-match');
+      renderPills('missingKeywords', data.missingKeywords, 'pill-missing');
+      renderPills('strengths', data.strengths, 'pill-strength');
+      renderPills('atsKeywords', data.atsKeywordsToAdd, 'pill-ats');
+      renderSuggestions(data.suggestions);
+
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('results').style.display = 'block';
+      animateScore(data.matchScore || 0);
+
+      document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    } catch (err) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('errorBox').style.display = 'block';
+      document.getElementById('errorBox').textContent = '⚠ ' + (err.message || 'Something went wrong. Please try again.');
+    } finally {
+      document.getElementById('analyseBtn').disabled = false;
+    }
+  }
+</script>
+</body>
+</html>
